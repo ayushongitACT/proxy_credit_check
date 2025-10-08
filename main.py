@@ -124,7 +124,7 @@ if st.button("🔍 Check Proxy Credit"):
             }
             extra_params = {k: v for k, v in extra_params.items() if v and v not in ["false", ""]}
 
-            with st.spinner("Sending request via ScraperAPI"):
+            with st.spinner("Sending request via ScraperAPI..."):
                 if method == "GET":
                     response = requests.get(scraperapi_url, headers=headers, cookies=cookies, params={**params, **extra_params}, timeout=30)
                 else:
