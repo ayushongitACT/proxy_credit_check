@@ -5,7 +5,7 @@ import re
 import ast
 from io import BytesIO
 
-st.title("🧭 Universal Proxy Credit Checker")
+st.title("🧭 Proxy Credit Checker")
 
 def safe_json_loads(text, field_name="Field"):
     """Safely parse input as JSON or Python dict string."""
@@ -124,7 +124,7 @@ if st.button("🔍 Check Proxy Credit"):
             }
             extra_params = {k: v for k, v in extra_params.items() if v and v not in ["false", ""]}
 
-            with st.spinner("Sending request via ScraperAPI (fetching actual site)..."):
+            with st.spinner("Sending request via ScraperAPI"):
                 if method == "GET":
                     response = requests.get(scraperapi_url, headers=headers, cookies=cookies, params={**params, **extra_params}, timeout=30)
                 else:
