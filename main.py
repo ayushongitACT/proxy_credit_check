@@ -5,7 +5,7 @@ import re
 import ast
 from io import BytesIO
 
-st.title("🧭 Universal Proxy Credit Checker")
+st.title("🧭 Proxy Credit Checker")
 
 def safe_json_loads(text, field_name="Field"):
     """Safely parse input as JSON or Python dict string."""
@@ -124,7 +124,7 @@ if st.button("🔍 Check Proxy Credit"):
             }
             extra_params = {k: v for k, v in extra_params.items() if v and v not in ["false", ""]}
 
-            with st.spinner("Sending request via ScraperAPI (fetching actual site)..."):
+            with st.spinner("Sending request via ScraperAPI..."):
                 if method == "GET":
                     response = requests.get(scraperapi_url, headers=headers, cookies=cookies, params={**params, **extra_params}, timeout=30)
                 else:
@@ -132,7 +132,19 @@ if st.button("🔍 Check Proxy Credit"):
 
             # Fetch credit cost info separately
             base_endpoint = "https://api.scraperapi.com/account/urlcost"
-            credit_params = {"api_key": api_key, "url": url, "render": str(render).lower()}
+            credit_params = {
+                "api_key": api_key,
+                "url": url,
+                "render": str(render).lower(),
+                "country_code": geo_code,
+                "premium": str(premium).lower(),
+                "ultra_premium": str(ultra_premium).lower(),
+                "autoparse": str(autoparse).lower(),
+                "keep_headers": str(keep_headers).lower(),
+                "device_type": device_type
+            }
+            # Remove empty / false params
+            credit_params = {k: v for k, v in credit_params.items() if v and v not in ["false", ""]}
             credit_resp = requests.get(base_endpoint, params=credit_params, timeout=30)
             try:
                 data = credit_resp.json()
@@ -165,20 +177,35 @@ if st.button("🔍 Check Proxy Credit"):
         else:
             st.info("No response to display.")
 
-        # --- Generate Python Script ---
+                # --- Generate Python Script ---
+        common_config = f"""
+headers = {json.dumps(headers, indent=4)}
+cookies = {json.dumps(cookies, indent=4)}
+params = {json.dumps(params, indent=4)}
+json_data = {json.dumps(json_data, indent=4)}
+method = "{method}"
+url = "{url}"
+"""
+
         if platform == "Scrape.do":
             script_content = f'''import requests
 
 token = "{token}"
 proxy_params = "{'&'.join(proxy_params)}"
-proxy_url = f"http://{{token}}:{{proxy_params}}@proxy.scrape.do:8080" if proxy_params else f"http://{{token}}@proxy.scrape.do:8080"
+proxy_url = f"http://{{token}}:{{proxy_params}}@proxy.scrape.do:8080" if proxy_params else f"http://{{token}}:@proxy.scrape.do:8080"
 proxies = {{"http": proxy_url, "https": proxy_url}}
+{common_config}
 
-url = "{url}"
-response = requests.get(url, proxies=proxies, verify=False)
+print("🔗 Sending request via Scrape.do...")
+
+if method == "GET":
+    response = requests.get(url, headers=headers, cookies=cookies, params=params, proxies=proxies, verify=False, timeout=30)
+else:
+    response = requests.post(url, headers=headers, cookies=cookies, params=params, json=json_data, proxies=proxies, verify=False, timeout=30)
+
 print("Status:", response.status_code)
 print("Scrape.do Request Cost:", response.headers.get("scrape.do-request-cost", "Not Found"))
-print(response.text[:500])
+print("Response Preview:\\n", response.text[:500])
 '''
 
         elif platform == "ScraperAPI":
@@ -186,15 +213,46 @@ print(response.text[:500])
 
 api_key = "{api_key}"
 url = "{url}"
+
+# --- Request Config ---
+headers = {json.dumps(headers, indent=4)}
+cookies = {json.dumps(cookies, indent=4)}
+params = {json.dumps(params, indent=4)}
+json_data = {json.dumps(json_data, indent=4)}
+method = "{method}"
+
+# --- ScraperAPI Extra Parameters ---
+extra_params = {{
+    "render": "{str(render).lower()}",
+    "country_code": "{geo_code}",
+    "premium": "{str(premium).lower()}",
+    "ultra_premium": "{str(ultra_premium).lower()}",
+    "autoparse": "{str(autoparse).lower()}",
+    "keep_headers": "{str(keep_headers).lower()}",
+    "device_type": "{device_type}"
+}}
+# Remove empty or false params
+extra_params = {{k: v for k, v in extra_params.items() if v and v not in ["false", ""]}}
+
 scraperapi_url = f"https://api.scraperapi.com/?api_key={{api_key}}&url={{url}}"
 
 print("🔗 Fetching actual site via ScraperAPI...")
-response = requests.get(scraperapi_url, timeout=30)
+
+if method == "GET":
+    response = requests.get(scraperapi_url, headers=headers, cookies=cookies, params={{**params, **extra_params}}, timeout=30)
+else:
+    response = requests.post(scraperapi_url, headers=headers, cookies=cookies, params={{**params, **extra_params}}, json=json_data, timeout=30)
+
 print("Status:", response.status_code)
 print("Response Preview:\\n", response.text[:500])
 
-# Get credit info
-credit_resp = requests.get("https://api.scraperapi.com/account/urlcost", params={{"api_key": api_key, "url": url}})
+# --- Get credit info (matching the same params) ---
+credit_params = {{
+    "api_key": api_key,
+    "url": url,
+    **extra_params
+}}
+credit_resp = requests.get("https://api.scraperapi.com/account/urlcost", params=credit_params, timeout=30)
 print("💰 ScraperAPI Credit Info:", credit_resp.json())
 '''
 
@@ -202,11 +260,17 @@ print("💰 ScraperAPI Credit Info:", credit_resp.json())
             script_content = f'''import requests
 
 proxies = {json.dumps(proxies, indent=4)}
+{common_config}
 
-url = "{url}"
-response = requests.get(url, proxies=proxies, verify=False)
+print("🔗 Sending request via Custom Proxy...")
+
+if method == "GET":
+    response = requests.get(url, headers=headers, cookies=cookies, params=params, proxies=proxies, verify=False, timeout=30)
+else:
+    response = requests.post(url, headers=headers, cookies=cookies, params=params, json=json_data, proxies=proxies, verify=False, timeout=30)
+
 print("Status:", response.status_code)
-print(response.text[:500])
+print("Response Preview:\\n", response.text[:500])
 '''
 
         # --- Download Script ---
