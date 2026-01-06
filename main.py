@@ -254,7 +254,7 @@ if method == "GET":
     response = requests.get(
         url,
         headers=headers,
-        # cookies=cookies,
+        cookies=cookies,
         params=params,
         proxies=proxies,
         verify=False,
@@ -264,7 +264,7 @@ else:
     response = requests.post(
         url,
         headers=headers,
-        # cookies=cookies,
+        cookies=cookies,
         params=params,
         data=json.dumps(json_data) if json_data else None,
         proxies=proxies,
