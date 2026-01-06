@@ -88,6 +88,7 @@ if st.button("🔍 Check Proxy Credit"):
 
         # --- SCRAPE.DO ---
         if platform == "Scrape.do":
+            cookies = {}
             proxy_params = []
             if geo_code:
                 proxy_params.append(f"geoCode={geo_code}")
