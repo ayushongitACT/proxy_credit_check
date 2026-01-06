@@ -219,7 +219,7 @@ if st.button("🔍 Check Proxy Credit"):
                 # --- Generate Python Script ---
         common_config = f"""
 headers = {json.dumps(headers, indent=4)}
-cookies = {json.dumps(cookies, indent=4)}
+cookies = {json.dumps(cookies, indent=4) if cookies else '{}'}
 params = {json.dumps(params, indent=4)}
 json_data = {json.dumps(json_data, indent=4)}
 method = "{method}"
