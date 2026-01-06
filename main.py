@@ -4,7 +4,7 @@ import json
 import re
 import ast
 from io import BytesIO
-
+import urllib.parse
 st.title("🧭 Proxy Credit Checker")
 
 def safe_json_loads(text, field_name="Field"):
@@ -28,7 +28,7 @@ def safe_json_loads(text, field_name="Field"):
 st.subheader("Proxy Provider")
 platform = st.selectbox(
     "Select Proxy Provider",
-    ["Scrape.do", "ScraperAPI", "Custom Proxy"]
+    ["Scrape.do", "Custom Proxy"]
 )
 
 # --- Proxy Configuration ---
@@ -46,17 +46,18 @@ if platform == "Scrape.do":
     custom_headers = st.checkbox("Enable Custom Headers", value=True)
     extra_headers = st.checkbox("Enable Extra Headers", value=True)
     geo_code = st.text_input("Geo Code (e.g., us, in etc.)", "")
-
-elif platform == "ScraperAPI":
-    st.subheader("ScraperAPI Configuration")
-    api_key = st.text_input("Enter your ScraperAPI key")
-    geo_code = st.text_input("Country Code (e.g., us, in etc.)", "")
-    render = st.checkbox("Enable Render Mode", value=False)
-    premium = st.checkbox("Use Premium Proxy", value=False)
-    ultra_premium = st.checkbox("Use Ultra Premium Proxy", value=False)
-    autoparse = st.checkbox("Enable Auto Parse", value=False)
-    keep_headers = st.checkbox("Keep Headers", value=True)
-    device_type = st.selectbox("Device Type", ["desktop", "mobile"], index=0)
+    if custom_headers and extra_headers:
+        st.error("⚠️ You can't use both Custom Headers and Extra Headers at the same time.")
+# elif platform == "ScraperAPI":
+#     st.subheader("ScraperAPI Configuration")
+#     api_key = st.text_input("Enter your ScraperAPI key")
+#     geo_code = st.text_input("Country Code (e.g., us, in etc.)", "")
+#     render = st.checkbox("Enable Render Mode", value=False)
+#     premium = st.checkbox("Use Premium Proxy", value=False)
+#     ultra_premium = st.checkbox("Use Ultra Premium Proxy", value=False)
+#     autoparse = st.checkbox("Enable Auto Parse", value=False)
+#     keep_headers = st.checkbox("Keep Headers", value=True)
+#     device_type = st.selectbox("Device Type", ["desktop", "mobile"], index=0)
 
 elif platform == "Custom Proxy":
     st.subheader("Custom Proxy Configuration")
@@ -71,14 +72,14 @@ st.subheader("Request Configuration")
 url = st.text_input("Request URL (e.g., https://httpbin.org/get)")
 method = st.selectbox("HTTP Method", ["GET", "POST"])
 headers_text = st.text_area("Headers (JSON or dict format)", "{}", height=120)
-cookies_text = st.text_area("Cookies (JSON or dict format)", "{}", height=80)
+
 params_text = st.text_area("Query Params (JSON or dict format)", "{}", height=80)
 json_data_text = st.text_area("JSON Body (JSON or dict format)", "{}", height=120)
-
+timeout_time = st.number_input("Timeout (seconds)", min_value=1, max_value=120, value=30)
 if st.button("🔍 Check Proxy Credit"):
     try:
         headers = safe_json_loads(headers_text, "Headers")
-        cookies = safe_json_loads(cookies_text, "Cookies")
+        
         params = safe_json_loads(params_text, "Params")
         json_data = safe_json_loads(json_data_text, "JSON Body")
 
@@ -93,67 +94,105 @@ if st.button("🔍 Check Proxy Credit"):
             if super_mode:
                 proxy_params.append("super=true")
             if custom_headers:
+                if headers == {}:
+                    st.error("⚠️ Custom Headers enabled but no headers provided.")
+                new_headers = {}
+                for key in headers.keys():
+                    new_headers[f'sd-{key}'] = headers[key]
+                headers = new_headers
                 proxy_params.append("customHeaders=true")
             if extra_headers:
+                if headers == {}:
+                    st.error("⚠️ Extra Headers enabled but no headers provided.")
                 proxy_params.append("extraHeaders=true")
 
             proxy_param_str = "&".join(proxy_params)
-            proxy_url = f"http://{token}:{proxy_param_str}@proxy.scrape.do:8080" if proxy_param_str else f"http://{token}:@proxy.scrape.do:8080"
+            if method == 'GET':
+                if proxy_param_str:
+                    proxy_url = f"http://{token}:{proxy_param_str}@proxy.scrape.do:8080"
+                else:
+                    proxy_url = f"http://{token}:@proxy.scrape.do:8080"
+            elif method == 'POST':
+                proxy_params = {}
+                if proxy_param_str:
+                    proxy_url = f"http://{token}:{urllib.parse.urlencode(proxy_params)}&{proxy_param_str}@proxy.scrape.do:8080"
+                else:
+                    proxy_url = f"http://{token}:{urllib.parse.urlencode(proxy_params)}@proxy.scrape.do:8080"
             proxies = {"http": proxy_url, "https": proxy_url}
 
-            with st.spinner("Sending request via Scrape.do..."):
+            # Make the request
+            with st.spinner("Sending request..."):
                 if method == "GET":
-                    response = requests.get(url, headers=headers, cookies=cookies, params=params, proxies=proxies, verify=False, timeout=30)
+                    response = requests.get(
+                        url,
+                        headers=headers,
+                        # cookies=cookies,
+                        params=params,
+                        proxies=proxies,
+                        verify=False,
+                        timeout=timeout_time,
+                    )
                 else:
-                    response = requests.post(url, headers=headers, cookies=cookies, params=params, json=json_data, proxies=proxies, verify=False, timeout=30)
+                    response = requests.post(
+                        url,
+                        headers=headers,
+                        # cookies=cookies,
+                        params=params,
+                        data=json.dumps(json_data) if json_data else None,
+                        proxies=proxies,
+                        verify=False,
+                        timeout=timeout_time,
+                    )
 
             cost = response.headers.get("scrape.do-request-cost", "Not Found")
 
         # --- SCRAPERAPI ---
-        elif platform == "ScraperAPI":
-            # Construct ScraperAPI URL for actual site request
-            scraperapi_url = f"https://api.scraperapi.com/?api_key={api_key}&url={url}"
-            extra_params = {
-                "render": str(render).lower(),
-                "country_code": geo_code,
-                "premium": str(premium).lower(),
-                "ultra_premium": str(ultra_premium).lower(),
-                "autoparse": str(autoparse).lower(),
-                "keep_headers": str(keep_headers).lower(),
-                "device_type": device_type
-            }
-            extra_params = {k: v for k, v in extra_params.items() if v and v not in ["false", ""]}
+        # elif platform == "ScraperAPI":
+        #     # Construct ScraperAPI URL for actual site request
+        #     scraperapi_url = f"https://api.scraperapi.com/?api_key={api_key}&url={url}"
+        #     extra_params = {
+        #         "render": str(render).lower(),
+        #         "country_code": geo_code,
+        #         "premium": str(premium).lower(),
+        #         "ultra_premium": str(ultra_premium).lower(),
+        #         "autoparse": str(autoparse).lower(),
+        #         "keep_headers": str(keep_headers).lower(),
+        #         "device_type": device_type
+        #     }
+        #     extra_params = {k: v for k, v in extra_params.items() if v and v not in ["false", ""]}
 
-            with st.spinner("Sending request via ScraperAPI..."):
-                if method == "GET":
-                    response = requests.get(scraperapi_url, headers=headers, cookies=cookies, params={**params, **extra_params}, timeout=30)
-                else:
-                    response = requests.post(scraperapi_url, headers=headers, cookies=cookies, params={**params, **extra_params}, json=json_data, timeout=30)
+        #     with st.spinner("Sending request via ScraperAPI..."):
+        #         if method == "GET":
+        #             response = requests.get(scraperapi_url, headers=headers, cookies=cookies, params={**params, **extra_params}, timeout=30)
+        #         else:
+        #             response = requests.post(scraperapi_url, headers=headers, cookies=cookies, params={**params, **extra_params}, json=json_data, timeout=30)
 
-            # Fetch credit cost info separately
-            base_endpoint = "https://api.scraperapi.com/account/urlcost"
-            credit_params = {
-                "api_key": api_key,
-                "url": url,
-                "render": str(render).lower(),
-                "country_code": geo_code,
-                "premium": str(premium).lower(),
-                "ultra_premium": str(ultra_premium).lower(),
-                "autoparse": str(autoparse).lower(),
-                "keep_headers": str(keep_headers).lower(),
-                "device_type": device_type
-            }
-            # Remove empty / false params
-            credit_params = {k: v for k, v in credit_params.items() if v and v not in ["false", ""]}
-            credit_resp = requests.get(base_endpoint, params=credit_params, timeout=30)
-            try:
-                data = credit_resp.json()
-                cost = data.get("credits", "Not Found")
-            except Exception:
-                cost = "Invalid Response"
+        #     # Fetch credit cost info separately
+        #     base_endpoint = "https://api.scraperapi.com/account/urlcost"
+        #     credit_params = {
+        #         "api_key": api_key,
+        #         "url": url,
+        #         "render": str(render).lower(),
+        #         "country_code": geo_code,
+        #         "premium": str(premium).lower(),
+        #         "ultra_premium": str(ultra_premium).lower(),
+        #         "autoparse": str(autoparse).lower(),
+        #         "keep_headers": str(keep_headers).lower(),
+        #         "device_type": device_type
+        #     }
+        #     # Remove empty / false params
+        #     credit_params = {k: v for k, v in credit_params.items() if v and v not in ["false", ""]}
+        #     credit_resp = requests.get(base_endpoint, params=credit_params, timeout=30)
+        #     try:
+        #         data = credit_resp.json()
+        #         cost = data.get("credits", "Not Found")
+        #     except Exception:
+        #         cost = "Invalid Response"
 
         # --- CUSTOM PROXY ---
         elif platform == "Custom Proxy":
+            cookies_text = st.text_area("Cookies (JSON or dict format)", "{}", height=80)
+            cookies = safe_json_loads(cookies_text, "Cookies")
             if proxy_type == "Proxy URL":
                 proxies = {"http": custom_proxy_url, "https": custom_proxy_url}
             else:
@@ -192,69 +231,97 @@ url = "{url}"
 
 token = "{token}"
 proxy_params = "{'&'.join(proxy_params)}"
-proxy_url = f"http://{{token}}:{{proxy_params}}@proxy.scrape.do:8080" if proxy_params else f"http://{{token}}:@proxy.scrape.do:8080"
+# proxy_url = f"http://{{token}}:{{proxy_params}}@proxy.scrape.do:8080" if proxy_params else f"http://{{token}}:@proxy.scrape.do:8080"
+proxy_param_str = "&".join(proxy_params)
+if method == 'GET':
+    if proxy_param_str:
+        proxy_url = f"http://{{token}}:{{proxy_param_str}}@proxy.scrape.do:8080"
+    else:
+        proxy_url = f"http://{{token}}:@proxy.scrape.do:8080"
+elif method == 'POST':
+    proxy_params = {{}}
+    if proxy_param_str:
+        proxy_url = f"http://{{token}}:{{urllib.parse.urlencode(proxy_params)}}&{{proxy_param_str}}@proxy.scrape.do:8080"
+    else:
+        proxy_url = f"http://{{token}}:{{urllib.parse.urlencode(proxy_params)}}@proxy.scrape.do:8080"
 proxies = {{"http": proxy_url, "https": proxy_url}}
 {common_config}
 
 print("🔗 Sending request via Scrape.do...")
 
 if method == "GET":
-    response = requests.get(url, headers=headers, cookies=cookies, params=params, proxies=proxies, verify=False, timeout=30)
+    response = requests.get(
+        url,
+        headers=headers,
+        # cookies=cookies,
+        params=params,
+        proxies=proxies,
+        verify=False,
+        timeout=timeout_time,
+    )
 else:
-    response = requests.post(url, headers=headers, cookies=cookies, params=params, json=json_data, proxies=proxies, verify=False, timeout=30)
-
+    response = requests.post(
+        url,
+        headers=headers,
+        # cookies=cookies,
+        params=params,
+        data=json.dumps(json_data) if json_data else None,
+        proxies=proxies,
+        verify=False,
+        timeout=timeout_time,
+    )
 print("Status:", response.status_code)
 print("Scrape.do Request Cost:", response.headers.get("scrape.do-request-cost", "Not Found"))
-print("Response Preview:\\n", response.text[:500])
+print("Response Preview:\\n", response.text[:1000])
 '''
 
-        elif platform == "ScraperAPI":
-            script_content = f'''import requests
+#         elif platform == "ScraperAPI":
+#             script_content = f'''import requests
 
-api_key = "{api_key}"
-url = "{url}"
+# api_key = "{api_key}"
+# url = "{url}"
 
-# --- Request Config ---
-headers = {json.dumps(headers, indent=4)}
-cookies = {json.dumps(cookies, indent=4)}
-params = {json.dumps(params, indent=4)}
-json_data = {json.dumps(json_data, indent=4)}
-method = "{method}"
+# # --- Request Config ---
+# headers = {json.dumps(headers, indent=4)}
+# cookies = {json.dumps(cookies, indent=4)}
+# params = {json.dumps(params, indent=4)}
+# json_data = {json.dumps(json_data, indent=4)}
+# method = "{method}"
 
-# --- ScraperAPI Extra Parameters ---
-extra_params = {{
-    "render": "{str(render).lower()}",
-    "country_code": "{geo_code}",
-    "premium": "{str(premium).lower()}",
-    "ultra_premium": "{str(ultra_premium).lower()}",
-    "autoparse": "{str(autoparse).lower()}",
-    "keep_headers": "{str(keep_headers).lower()}",
-    "device_type": "{device_type}"
-}}
-# Remove empty or false params
-extra_params = {{k: v for k, v in extra_params.items() if v and v not in ["false", ""]}}
+# # --- ScraperAPI Extra Parameters ---
+# extra_params = {{
+#     "render": "{str(render).lower()}",
+#     "country_code": "{geo_code}",
+#     "premium": "{str(premium).lower()}",
+#     "ultra_premium": "{str(ultra_premium).lower()}",
+#     "autoparse": "{str(autoparse).lower()}",
+#     "keep_headers": "{str(keep_headers).lower()}",
+#     "device_type": "{device_type}"
+# }}
+# # Remove empty or false params
+# extra_params = {{k: v for k, v in extra_params.items() if v and v not in ["false", ""]}}
 
-scraperapi_url = f"https://api.scraperapi.com/?api_key={{api_key}}&url={{url}}"
+# scraperapi_url = f"https://api.scraperapi.com/?api_key={{api_key}}&url={{url}}"
 
-print("🔗 Fetching actual site via ScraperAPI...")
+# print("🔗 Fetching actual site via ScraperAPI...")
 
-if method == "GET":
-    response = requests.get(scraperapi_url, headers=headers, cookies=cookies, params={{**params, **extra_params}}, timeout=30)
-else:
-    response = requests.post(scraperapi_url, headers=headers, cookies=cookies, params={{**params, **extra_params}}, json=json_data, timeout=30)
+# if method == "GET":
+#     response = requests.get(scraperapi_url, headers=headers, cookies=cookies, params={{**params, **extra_params}}, timeout=30)
+# else:
+#     response = requests.post(scraperapi_url, headers=headers, cookies=cookies, params={{**params, **extra_params}}, json=json_data, timeout=30)
 
-print("Status:", response.status_code)
-print("Response Preview:\\n", response.text[:500])
+# print("Status:", response.status_code)
+# print("Response Preview:\\n", response.text[:500])
 
-# --- Get credit info (matching the same params) ---
-credit_params = {{
-    "api_key": api_key,
-    "url": url,
-    **extra_params
-}}
-credit_resp = requests.get("https://api.scraperapi.com/account/urlcost", params=credit_params, timeout=30)
-print("💰 ScraperAPI Credit Info:", credit_resp.json())
-'''
+# # --- Get credit info (matching the same params) ---
+# credit_params = {{
+#     "api_key": api_key,
+#     "url": url,
+#     **extra_params
+# }}
+# credit_resp = requests.get("https://api.scraperapi.com/account/urlcost", params=credit_params, timeout=30)
+# print("💰 ScraperAPI Credit Info:", credit_resp.json())
+# '''
 
         else:  # Custom Proxy
             script_content = f'''import requests
