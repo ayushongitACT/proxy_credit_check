@@ -31,11 +31,7 @@ def safe_json_loads(text, field_name="Field"):
 st.subheader("Proxy Configuration")
 token = st.text_input("Enter your Scrape.do token", type="password")
 
-st.subheader("Proxy Parameters")
-super_mode = st.checkbox("Enable Super Mode", value=True)
-custom_headers = st.checkbox("Enable Custom Headers", value=True)
-extra_headers = st.checkbox("Enable Extra Headers", value=True)
-geo_code = st.text_input("Geo Code (e.g., us, in etc.)", "")
+
 
 # --- Request Configuration ---
 st.subheader("Request Configuration")
@@ -46,6 +42,12 @@ headers_text = st.text_area("Headers (JSON or dict format)", "{}", height=120)
 params_text = st.text_area("Query Params (JSON or dict format)", "{}", height=80)
 json_data_text = st.text_area("JSON Body (JSON or dict format)", "{}", height=120)
 timeout_time = st.number_input("Timeout (seconds)", min_value=1, max_value=120, value=30)
+st.subheader("Proxy Parameters")
+super_mode = st.checkbox("Enable Super Mode", value=False)
+custom_headers = st.checkbox("Enable Custom Headers", value=False)
+extra_headers = st.checkbox("Enable Extra Headers", value=False)
+geo_code = st.text_input("Geo Code (e.g., us, in etc.)", "")
+
 if custom_headers and extra_headers:
     st.error("⚠️ You can't use both Custom Headers and Extra Headers at the same time.")
 headers = safe_json_loads(headers_text, "Headers")
